@@ -6,9 +6,8 @@ authors = ["sovus_tartar <v.nesmeianov@1440.space>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "~3.8"
+python = "~3.12"
 pandas = ""
-numpy = ""
 
 [build-system]
 requires = ["poetry-core"]

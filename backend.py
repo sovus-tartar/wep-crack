@@ -23,7 +23,7 @@ def main():
         StartWepNetworksSearching()
         time.sleep(100)
     finally:
-        subprocess.run(["bash", "clean.sh"])
+        subprocess.run(["bash", "clean.sh", currentMonitorAdapter])
         return
 
 # return exit code of child process

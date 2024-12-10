@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "wep-crack"
+version = "0.0.1"
+description = ""
+authors = ["sovus_tartar <v.nesmeianov@1440.space>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "~3.8"
+pandas = ""
+numpy = ""
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[virtualenvs]
+create = true
+in-project = true

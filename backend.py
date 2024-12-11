@@ -146,7 +146,7 @@ def GetNetworkKey():
 
     return True
 
-def GetAsciiKey():
+def GetAsciiKey() -> str:
     # parse key.log file if GetNetworkKey Succeeded
     return
 

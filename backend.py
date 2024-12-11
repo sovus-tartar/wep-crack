@@ -1,8 +1,6 @@
 import numpy as np
 import pandas as pd
 import subprocess
-import multiprocessing
-import asyncio
 import time
 from io import StringIO
 
@@ -10,13 +8,13 @@ from io import StringIO
 currentMonitorAdapter = "_no_adapter_"
 
 isPollingNetworks = False
-pollingProcess = subprocess.Popen
+pollingProcess = 0
 
 isDumpingNetwork = False
-dumpingProcess = subprocess.Popen
+dumpingProcess = 0
 
 # Const
-framesNeeded = 15000
+framesNeeded = 16000
 keySolveTimeout = 6
 frameCheckTimeout = 6
 wifiSearchTimeout = 10
@@ -38,25 +36,28 @@ def main():
         # Получаем Сети
         networks = GetWepNetworks()
 
-        i = networks["SSID"].index(" beeline-router")
+        i = networks["SSID"].index("beeline-router")
         bssid = networks["BSSID"][i]
         Channel = networks["Channel"][i]
         SSID = networks["SSID"][i]
 
-        dumpingProcess = StartNetworkDumping(dict(zip(["BSSID", "Channel", "SSID"], [bssid, Channel, SSID])))
+        StartNetworkDumping(dict(zip(["BSSID", "Channel", "SSID"], [bssid, Channel, SSID])))
 
         framesReady = 0
         while (framesReady < framesNeeded):
             time.sleep(frameCheckTimeout)
             framesReady = GetFramesQuantity()
 
-        StopNetworkDumping(dumpingProcess)
+        StopNetworkDumping()
 
         keyStr = GetNetworkKey()
-        print(keyStr)
+        if keyStr != False:
+            print("The key is: ", keyStr)
+        else:
+            print("The key was not found. Try to capture more IVs")
     finally:
         StopWepNetworksSearching()
-        StopNetworkDumping(dumpingProcess)
+        StopNetworkDumping()
 
         CleanAllPosteffects()
         return
@@ -84,11 +85,14 @@ def SwitchMonitorMode(adapter : str):
 def StartWepNetworksSearching():
     if checkMonitorAdapter():
         process = subprocess.Popen(["sudo", "bash", "WepNetworkSearching.sh", currentMonitorAdapter])
+
         global isPollingNetworks
         isPollingNetworks = True
+
         global pollingProcess
         pollingProcess = process
         return process
+
     return 0
 
 def StopWepNetworksSearching():
@@ -96,7 +100,9 @@ def StopWepNetworksSearching():
     isPollingNetworks = False
 
     global pollingProcess
-    pollingProcess.terminate()
+    if pollingProcess != 0:
+        pollingProcess.terminate()
+        pollingProcess = 0
 
     return
 
@@ -119,11 +125,17 @@ def GetWepNetworks():
     return []
 
 def StartNetworkDumping(network):
-    process = subprocess.Popen(["bash", "StartDumping.sh", network["BSSID"], network["Channel"], currentMonitorAdapter])
-    return process
+    global dumpingProcess
+    dumpingProcess = subprocess.Popen(["bash", "StartDumping.sh", network["BSSID"], network["Channel"], currentMonitorAdapter])
+    return dumpingProcess
 
-def StopNetworkDumping(process : subprocess.Popen):
-    process.terminate()
+def StopNetworkDumping():
+    global dumpingProcess
+    if dumpingProcess == 0:
+        return
+
+    dumpingProcess.terminate()
+    dumpingProcess = 0
 
 def GetFramesQuantity() -> int:
     with open('basic_wep.cap-01.csv', 'r') as file:
@@ -144,12 +156,17 @@ def GetFramesQuantity() -> int:
 
     # Создание DataFrame для первой таблицы
     table1 = pd.read_csv(StringIO(''.join(table1_lines)), skipinitialspace=True)
-
+    # tempList = [int(k) for k in table1["IV"]]
+    return table1["# IV"][0]
     # Создание DataFrame для второй таблицы
-    table2 = pd.read_csv(StringIO(''.join(table2_lines)), skipinitialspace=True)
-    tempList = [int(k) for k in table2["# packets"]]
+    # table2 = pd.read_csv(StringIO(''.join(table2_lines)), skipinitialspace=True)
 
-    return max(tempList)
+def GetFramesPercentage():
+    if isDumpingNetwork:
+        return int(100 * GetFramesQuantity() / framesNeeded)
+    else:
+        return False
+
 
 
 def GetNetworkKey():
@@ -165,7 +182,6 @@ def GetNetworkKey():
     except:
         return False
 
-    subprocess.run(['sudo', 'rm', 'key.log'])
     keyStr = GetAsciiKey(key)
     return keyStr
 
@@ -185,3 +201,4 @@ def CleanAllPosteffects():
 
 if __name__ == '__main__':
     main()
+

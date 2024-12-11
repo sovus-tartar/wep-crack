@@ -79,9 +79,7 @@ def StopWepNetworksSearching(process : subprocess.Popen):
     isPollingNetworks = False
 
     process.terminate()
-    # process.wait()
-    # subprocess.run(['sudo', 'rm','-f' ,'networks.temp-01.csv'])
-    return # list of dictionaries of network name, network bssid, network channel
+    return
 
 def GetWepNetworks():
     if (checkMonitorAdapter()):
@@ -139,6 +137,17 @@ def GetFramesQuantity() -> int:
 
 
 def GetNetworkKey():
+    process = subprocess.Popen(["bash", "CrackKey.sh"])
+
+    time.sleep(5)
+    process.terminate()
+
+    # if key exists return GetAsciiKey else return False
+
+    return True
+
+def GetAsciiKey():
+    # parse key.log file if GetNetworkKey Succeeded
     return
 
 def RemoveTempFiles():
@@ -147,6 +156,7 @@ def RemoveTempFiles():
 def BackendShutdown():
     return
 
-if __name__ == '__main__':
-    main()
+# if __name__ == '__main__':
+#     main()
 
+GetNetworkKey()

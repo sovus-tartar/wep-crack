@@ -7,7 +7,7 @@ A small GUI tool which simplifies key cracking for Wep-protected Wi-Fi networks
 3) sudo airmon-ng start [interface-name]
 4) Кнопка поиска сетей: sudo airodump-ng [interface-name] -o csv -w networks.temp ждём 10 секунд, завершаем прогу, парсим csv в файле networks.temp. Забираем название сети, BSSID, Channel
 5) sudo airodump-ng --bssid [network-bssid] --channel [network-channel] --write basic_wep.cap [interface-name]. Необходимо раз в 5 секунд парсить csv файл на предмет количества полученных фреймов. Ищем процент от 100 - индикатор состояния.
-6) sudo aircrack-ng -z basic_wep.cap-01.cap - парсим после слов KEY FOUND
+6) sudo aircrack-ng -z basic_wep.cap-01.cap -l key.log # если нет файла то попытка не удалась
 7) rm basic_wep*
 
 По завершении работы:

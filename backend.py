@@ -19,7 +19,7 @@ networks = 0
 # Const
 framesNeeded = 16000
 keySolveTimeout = 6
-frameCheckTimeout = 6
+frameCheckTimeout = 1
 wifiSearchTimeout = 10
 
 def checkMonitorAdapter():
@@ -55,6 +55,7 @@ def main():
 
         print('Начинаем дампить сеть beeline-router')
         StartNetworkDumping("beeline-router")
+        time.sleep(frameCheckTimeout)
 
         framesReady = 0
         while (framesReady < framesNeeded):
@@ -236,6 +237,12 @@ def GetNetworksNameList():
     if (networks == 0):
         return []
     else:
+        tempNetwork = []
+        for network in networks["SSID"]:
+            if network != str(nan):
+        [networkName for networkName in networks["SSID"]]
+        
+
         return [networkName for networkName in networks["SSID"]]
 
 if __name__ == '__main__':

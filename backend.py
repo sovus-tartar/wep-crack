@@ -67,7 +67,7 @@ def main():
         StopNetworkDumping()
 
         keyStr = GetNetworkKey()
-        if keyStr != False:
+        if keyStr != "":
             print("The key is: ", keyStr, "\r")
         else:
             print("The key was not found. Try to capture more IVs")
@@ -135,6 +135,8 @@ def GetWepNetworks():
         ssidList = ssidList[:listLen]
 
         outList = dict(zip(["BSSID", "Channel", "SSID"], [bssidList, channelList, ssidList]))
+
+
 
         return outList
 
@@ -205,7 +207,7 @@ def GetNetworkKey():
         with open('key.log', 'r') as file:
             key = file.readline()
     except:
-        return False
+        return ""
 
     keyStr = GetAsciiKey(key)
     return keyStr
@@ -237,13 +239,25 @@ def GetNetworksNameList():
     if (networks == 0):
         return []
     else:
-        tempNetwork = []
-        for network in networks["SSID"]:
-            if network != str(nan):
-        [networkName for networkName in networks["SSID"]]
-        
+        fullSSIDList = [network for network in networks["SSID"]]
+        fullBSSIDList = [bssid for bssid in networks["BSSID"]]
+        fullChannelList = [channel for channel in networks["Channel"]]
+        tempSSIDList = []
+        tempBSSIDList = []
+        tempChannelList = []
+        for network in fullSSIDList:
+            if network == network:
+                tempSSIDList.append(network)
+                i = fullSSIDList.index(network)
 
-        return [networkName for networkName in networks["SSID"]]
+                tempBSSIDList.append(fullBSSIDList[i])
+                tempChannelList.append(fullChannelList[i])
+
+        networks["BSSID"] = tempBSSIDList
+        networks["SSID"] = tempSSIDList
+        networks["Channel"] = tempChannelList
+
+        return tempSSIDList
 
 if __name__ == '__main__':
     main()
